@@ -1,53 +1,45 @@
 #include <MFRC522.h>
 #include <SPI.h>
 
-MFRC522 mfrc522(10, 9);
-MFRC522::MIFARE_Key key;
+#include "session.hpp"
+
+constexpr uint8_t key[nfc::uid_size] = {0xff};
 
 void setup() {
+  using namespace nfc;
+
   Serial.begin(9600);
   SPI.begin();
-  mfrc522.PCD_Init();
-  Serial.println("BEGIN");
+  init_mfrc522();
 
-  memset(key.keyByte, 0xff, 6);
+  Serial.println("BEGIN");
 }
 
 void loop() {
+  using namespace nfc;
+
   delay(500);
 
   uint8_t buf[18] = {0};
   uint8_t buf_size = sizeof buf;
   Serial.println("hey");
 
-  if (!mfrc522.PICC_IsNewCardPresent()) {
-    Serial.println("No card detected");
-    return;
-  }
+  auto session_opt = make_session(key);
 
-  if (!mfrc522.PICC_ReadCardSerial()) {
-    Serial.println("Couldn't read card serial");
-    return;
-  }
-
-  if (mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, 0, &key, &(mfrc522.uid)) != MFRC522::STATUS_OK) {
-    Serial.println("Couldn't authenticate");
-    return;
-  }
-
-  for (size_t i = 0; i < 4; i++) {
-    if (mfrc522.MIFARE_Read(i, buf, &buf_size) != MFRC522::STATUS_OK) {
-      Serial.println("Can't read card content");
-      return;
+  if (!session_opt) {
+    switch (session_opt.status()) {
+    case Status::NO_CARD_DETECTED:
+      Serial.println("No card detected");
+      break;
+    case Status::NO_UID_RECEIVED:
+      Serial.println("No uid received");
+      break;
+    case Status::BAD_KEY:
+      Serial.println("Bad key");
+      break;
+    default:
+      Serial.println("Unknown error");
+      break;
     }
-
-    for (const auto &value : buf) {
-      if (value <= 0xf)
-        Serial.print(0);
-      Serial.print(value, HEX);
-    }
-    Serial.println();
   }
-
-  mfrc522.PCD_StopCrypto1();
 }
