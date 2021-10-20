@@ -22,24 +22,28 @@ void loop() {
 
   uint8_t buf[18] = {0};
   uint8_t buf_size = sizeof buf;
-  Serial.println("hey");
 
   auto session_opt = make_session(key);
 
-  if (!session_opt) {
-    switch (session_opt.status()) {
-    case Status::NO_CARD_DETECTED:
-      Serial.println("No card detected");
-      break;
-    case Status::NO_UID_RECEIVED:
-      Serial.println("No uid received");
-      break;
-    case Status::BAD_KEY:
-      Serial.println("Bad key");
-      break;
-    default:
-      Serial.println("Unknown error");
-      break;
-    }
-  }
+  session_opt.process(
+      // Regular code
+      [&](const auto &) {},
+      // Error handler
+      [](auto status) {
+        switch (status) {
+        case Status::NO_CARD_DETECTED:
+          Serial.println("No card detected");
+          return;
+        case Status::NO_UID_RECEIVED:
+          Serial.println("No uid received");
+          return;
+        case Status::BAD_KEY:
+          Serial.println("Bad key");
+          return;
+        default:
+          Serial.print("Unknown error : ");
+          Serial.println(static_cast<int>(status));
+          return;
+        }
+      });
 }

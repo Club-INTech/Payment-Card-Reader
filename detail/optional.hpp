@@ -16,12 +16,34 @@ class Optional_base {
 public:
   Optional_base(const T &object) : m_is_valid{true}, m_content{Status_T::OK} { new (&m_content.object) T{object}; }
   Optional_base(T &&object) : m_is_valid{true}, m_content{Status_T::OK} { new (&m_content.object) T{FWD(object)}; }
-  Optional_base(Status_T status) : m_is_valid{false}, m_content{Status_T::OK} {}
+  Optional_base(Status_T status) : m_is_valid{false}, m_content{status} {}
 
-  Status_T status() const { return m_content.status; }
+  // If containing an object, call a functor on the content; call an handler on the status code instead
+  template<typename F, typename Handler_F>
+  void process(F &&ftor, Handler_F &&handler_ftor) & {
+    if (m_is_valid) {
+      FWD(ftor)(m_content.object);
+    } else {
+      FWD(handler_ftor)(m_content.status);
+    }
+  }
+  template<typename F, typename Handler_F>
+  void process(F &&ftor, Handler_F &&handler_ftor) && {
+    if (m_is_valid) {
+      FWD(ftor)(move(m_content.object));
+    } else {
+      FWD(handler_ftor)(m_content.status);
+    }
+  }
+  template<typename F, typename Handler_F>
+  void process(F &&ftor, Handler_F &&handler_ftor) const & {
+    if (m_is_valid) {
+      FWD(ftor)(m_content.object);
+    } else {
+      FWD(handler_ftor)(m_content.status);
+    }
+  }
 
-  T &operator*() { return m_content.object; }
-  T *operator->() { return &m_content.object; }
   operator bool() const { return m_is_valid; }
 
 private:
