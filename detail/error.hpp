@@ -9,7 +9,7 @@
     return (STATUS);
 #define PROPAGATE(EXPR)                                                                                                \
   if (true) {                                                                                                          \
-    auto status = (EXPR);                                                                                              \
-    if (status != ::nfc::Status::OK)                                                                                   \
-      return status;                                                                                                   \
+    auto nfc__status = (EXPR);                                                                                         \
+    if (nfc__status != ::nfc::Status::OK)                                                                              \
+      return nfc__status;                                                                                              \
   }
