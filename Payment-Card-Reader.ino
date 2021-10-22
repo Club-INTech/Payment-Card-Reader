@@ -3,7 +3,7 @@
 
 #include "session.hpp"
 
-constexpr uint8_t key[nfc::uid_size] = {0xff};
+constexpr uint8_t key[nfc::key_size] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
 static void error_handler(nfc::Status status) {
   using namespace nfc;
@@ -17,6 +17,12 @@ static void error_handler(nfc::Status status) {
     return;
   case Status::BAD_KEY:
     Serial.println("Bad key");
+    return;
+  case Status::READ_ERROR:
+    Serial.println("Couldn't read the PICC");
+    return;
+  case Status::NO_ACTIVE_PICC:
+    Serial.println("No PICC selected");
     return;
   default:
     Serial.print("Unknown error : ");
@@ -43,18 +49,18 @@ void loop() {
   uint8_t buf[18] = {0};
   uint8_t buf_size = sizeof buf;
 
-  auto session_opt = make_session();
+  if (select() != Status::OK) {
+    Serial.println("Error");
+    return;
+  }
 
-  session_opt.process(
-      [&](const auto &session) {
-        auto data_opt = session.read(0, key);
-        data_opt.process(
-            [](const auto &data) {
-              for (auto c : data)
-                Serial.print(c, HEX);
-              Serial.println();
-            },
-            error_handler);
-      },
-      error_handler);
+  for (auto i = 0; i < 4; i++) {
+    read(i, key).process(
+        [](const auto &data) {
+          for (auto c : data)
+            Serial.print(c, HEX);
+          Serial.println();
+        },
+        error_handler);
+  }
 }

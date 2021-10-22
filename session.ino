@@ -2,37 +2,41 @@
 
 #include "detail/error.hpp"
 
+using namespace nfc;
+
 // Hardcoded MFRC522 handler, because the program only deals with one reader
 static MFRC522 mfrc522{10, 9};
 
-// Indicates if a session is currently active
-static bool is_any_session_active;
+// Indicates if a PICC is in ACTIVE state
+static bool is_any_picc_active = false;
 
-// Read the content of a block on the PICC
-nfc::Optional<uint8_t[nfc::block_size]> nfc::Session::read(uint8_t block_index,
-                                                           const uint8_t key[nfc::block_size]) const {
-  uint8_t buf[block_size];
-  uint8_t size = block_size;
+// Indicates if the PCD is currently authenticated to a PICC
+static bool is_authenticated = false;
 
-  PROPAGATE(authenticate(block_index / blocks_per_sector_nb, key));
-  ASSERT(mfrc522.MIFARE_Read(block_index, buf, &size) != MFRC522::STATUS_OK, Status::READ_ERROR);
+// Sector to which the PCD is authenticated
+static uint8_t authenticated_to_sector_index;
 
-  return move(buf);
+// Check if the PCD is already authenticated to the given sector of the handled PICC
+static bool is_authenticated_to(uint8_t sector_index) {
+  return is_authenticated && authenticated_to_sector_index == sector_index;
 }
 
-// Authenticate to the designated sector of the PICC
-nfc::Status nfc::Session::authenticate(uint8_t sector_index, const uint8_t key[block_size]) const {
+// Authenticate to an ACTIVE PICC
+static nfc::Status authenticate(uint8_t sector_index, const uint8_t key[nfc::key_size]) {
   MFRC522::MIFARE_Key mf_key;
 
-  memcpy(mf_key.keyByte, key, sizeof mf_key.keyByte);
+  memcpy(mf_key.keyByte, key, key_size);
 
-  if (is_any_session_active)
+  if (is_authenticated) {
     mfrc522.PCD_StopCrypto1();
-  if (mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_B, sector_index, &mf_key, &m_uid) == MFRC522::STATUS_OK) {
-    is_any_session_active = true;
+  }
+  if (mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, sector_index, &mf_key, &mfrc522.uid) ==
+      MFRC522::STATUS_OK) {
+    is_authenticated = true;
+    authenticated_to_sector_index = sector_index;
     return Status::OK;
   } else {
-    is_any_session_active = false;
+    is_authenticated = false;
     return Status::BAD_KEY;
   }
 }
@@ -40,12 +44,31 @@ nfc::Status nfc::Session::authenticate(uint8_t sector_index, const uint8_t key[b
 // Initialize the remote MFRC522 chip
 void nfc::init_mfrc522() { mfrc522.PCD_Init(); }
 
-// Attempt to make a session out of a not yet handled PICC (ie, PICC in IDLE state)
-nfc::Optional<nfc::Session> nfc::make_session() {
+// Select a PICC and make it available to read / write operation
+Status nfc::select() {
   MFRC522::MIFARE_Key mf_key;
 
+  // Inviting idling PICCs
   ASSERT(mfrc522.PICC_IsNewCardPresent(), Status::NO_CARD_DETECTED);
+
+  // Try to handle a PICC in READY state, if any available
   ASSERT(mfrc522.PICC_ReadCardSerial(), Status::NO_UID_RECEIVED);
 
-  return Session{mfrc522.uid};
+  is_any_picc_active = true;
+  return Status::OK;
+}
+
+// Read the content of a block on the PICC
+Optional<uint8_t[block_size]> nfc::read(uint8_t block_index, const uint8_t key[key_size]) {
+  uint8_t buf[block_size];
+  uint8_t size = block_size;
+  uint8_t sector_index = block_index / blocks_per_sector_nb;
+
+  ASSERT(is_any_picc_active, Status::NO_ACTIVE_PICC);
+
+  if (!is_authenticated_to(sector_index))
+    PROPAGATE(authenticate(sector_index, key));
+  ASSERT(mfrc522.MIFARE_Read(block_index, buf, &size) == MFRC522::STATUS_OK, Status::READ_ERROR);
+
+  return buf;
 }
