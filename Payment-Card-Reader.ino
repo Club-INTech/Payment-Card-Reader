@@ -49,11 +49,7 @@ void loop() {
   uint8_t buf[18] = {0};
   uint8_t buf_size = sizeof buf;
 
-  if (select() != Status::OK) {
-    Serial.println("Error");
-    return;
-  }
-
+  select();
   for (auto i = 0; i < 4; i++) {
     read(i, key).process(
         [](const auto &data) {

@@ -14,8 +14,8 @@ namespace detail {
 template<typename T, typename Status_T>
 class Optional_base {
 public:
-  Optional_base(const T &object) : m_is_valid{true}, m_content{Status_T::OK} { new (&m_content.object) T{object}; }
-  Optional_base(T &&object) : m_is_valid{true}, m_content{Status_T::OK} { new (&m_content.object) T{FWD(object)}; }
+  Optional_base(const T &object) : m_is_valid{true}, m_content{Status_T::OK} { place(m_content.object, object); }
+  Optional_base(T &&object) : m_is_valid{true}, m_content{Status_T::OK} { place(m_content.object, move(object)); }
   Optional_base(Status_T status) : m_is_valid{false}, m_content{status} {}
 
   // If containing an object, call a functor on the content; call an handler on the status code instead

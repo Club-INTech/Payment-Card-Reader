@@ -2,4 +2,3 @@
 
 // Placement new operator
 void *operator new(size_t, void *ptr) { return ptr; }
-void *operator new[](size_t, void *ptr) { return ptr; }
