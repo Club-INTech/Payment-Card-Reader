@@ -55,7 +55,11 @@ Status nfc::select() {
   MFRC522::MIFARE_Key mf_key;
 
   // Halting the ACTIVE PICC
-  ASSERT(mfrc522.PICC_HaltA() == MFRC522::STATUS_OK, Status::HALT_DENIED);
+  if (is_any_picc_active) {
+    ASSERT(mfrc522.PICC_HaltA() == MFRC522::STATUS_OK, Status::HALT_DENIED);
+    unauthenticate();
+    is_any_picc_active = false;
+  }
 
   // Inviting idling PICCs
   ASSERT(mfrc522.PICC_IsNewCardPresent(), Status::NO_CARD_DETECTED);
