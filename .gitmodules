@@ -1,0 +1,4 @@
+[submodule "Arduino-SHA-256"]
+	path = Arduino-SHA-256
+	url = https://github.com/simonratner/Arduino-SHA-256
+	branch = master
