@@ -30,7 +30,7 @@ static nfc::Status authenticate(uint8_t trailing_block_index, const uint8_t *key
   if (is_authenticated) {
     mfrc522.PCD_StopCrypto1();
   }
-  if (mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailing_block_index, &mf_key, &mfrc522.uid) ==
+  if (mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_B, trailing_block_index, &mf_key, &mfrc522.uid) ==
       MFRC522::STATUS_OK) {
     is_authenticated = true;
     authenticated_to_trailing_block_index = trailing_block_index;
@@ -71,10 +71,16 @@ Status nfc::select() {
   return Status::OK;
 }
 
+// Get the UID of the ACTIVE PICC
+Optional<uint8_t[uid_size]> nfc::get_uid() {
+  ASSERT(is_any_picc_active, Status::NO_ACTIVE_PICC);
+  return mfrc522.uid.uidByte;
+}
+
 // Read the content of a block on the PICC
-Optional<uint8_t[block_size]> nfc::read(uint8_t block_index, const uint8_t *key) {
-  uint8_t buf[block_size];
-  uint8_t size = block_size;
+Optional<uint8_t[block_size + crc_size]> nfc::read(uint8_t block_index, const uint8_t *key) {
+  uint8_t buf[block_size + crc_size];
+  uint8_t size = sizeof buf;
   uint8_t trailing_block_index = block_index - (block_index % blocks_per_sector_nb) + 3;
 
   ASSERT(is_any_picc_active, Status::NO_ACTIVE_PICC);
@@ -87,4 +93,21 @@ Optional<uint8_t[block_size]> nfc::read(uint8_t block_index, const uint8_t *key)
   }
 
   return buf;
+}
+
+// Write a block of data to the PICC
+Status nfc::write(uint8_t block_index, const uint8_t *key, const uint8_t *data) {
+  uint8_t buf[block_size];
+  uint8_t trailing_block_index = block_index - (block_index % blocks_per_sector_nb) + 3;
+
+  memcpy(buf, data, sizeof buf);
+
+  ASSERT(is_any_picc_active, Status::NO_ACTIVE_PICC);
+
+  if (!is_authenticated_to(trailing_block_index))
+    PROPAGATE(authenticate(trailing_block_index, key));
+  if (mfrc522.MIFARE_Write(block_index, buf, block_size) != MFRC522::STATUS_OK) {
+    unauthenticate();
+    return Status::WRITE_ERROR;
+  }
 }
