@@ -23,6 +23,6 @@ using Optional = detail::Optional_base<T, Status>;
 
 void init_mfrc522();
 Status select();
-Optional<uint8_t[block_size]> read(uint8_t, const uint8_t key[block_size]);
+Optional<uint8_t[block_size]> read(uint8_t, const uint8_t *);
 
 } // namespace nfc

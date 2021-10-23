@@ -14,26 +14,26 @@ static bool is_any_picc_active = false;
 static bool is_authenticated = false;
 
 // Sector to which the PCD is authenticated
-static uint8_t authenticated_to_sector_index;
+static uint8_t authenticated_to_trailing_block_index;
 
 // Check if the PCD is already authenticated to the given sector of the handled PICC
-static bool is_authenticated_to(uint8_t sector_index) {
-  return is_authenticated && authenticated_to_sector_index == sector_index;
+static bool is_authenticated_to(uint8_t trailing_block_index) {
+  return is_authenticated && authenticated_to_trailing_block_index == trailing_block_index;
 }
 
 // Authenticate to an ACTIVE PICC
-static nfc::Status authenticate(uint8_t sector_index, const uint8_t key[nfc::key_size]) {
+static nfc::Status authenticate(uint8_t trailing_block_index, const uint8_t *key) {
   MFRC522::MIFARE_Key mf_key;
 
-  memcpy(mf_key.keyByte, key, key_size);
+  memcpy(mf_key.keyByte, key, sizeof mf_key.keyByte);
 
   if (is_authenticated) {
     mfrc522.PCD_StopCrypto1();
   }
-  if (mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, sector_index, &mf_key, &mfrc522.uid) ==
+  if (mfrc522.PCD_Authenticate(MFRC522::PICC_CMD_MF_AUTH_KEY_A, trailing_block_index, &mf_key, &mfrc522.uid) ==
       MFRC522::STATUS_OK) {
     is_authenticated = true;
-    authenticated_to_sector_index = sector_index;
+    authenticated_to_trailing_block_index = trailing_block_index;
     return Status::OK;
   } else {
     is_authenticated = false;
@@ -59,15 +59,15 @@ Status nfc::select() {
 }
 
 // Read the content of a block on the PICC
-Optional<uint8_t[block_size]> nfc::read(uint8_t block_index, const uint8_t key[key_size]) {
+Optional<uint8_t[block_size]> nfc::read(uint8_t block_index, const uint8_t *key) {
   uint8_t buf[block_size];
   uint8_t size = block_size;
-  uint8_t sector_index = block_index / blocks_per_sector_nb;
+  uint8_t trailing_block_index = block_index - (block_index % blocks_per_sector_nb) + 3;
 
   ASSERT(is_any_picc_active, Status::NO_ACTIVE_PICC);
 
-  if (!is_authenticated_to(sector_index))
-    PROPAGATE(authenticate(sector_index, key));
+  if (!is_authenticated_to(trailing_block_index))
+    PROPAGATE(authenticate(trailing_block_index, key));
   ASSERT(mfrc522.MIFARE_Read(block_index, buf, &size) == MFRC522::STATUS_OK, Status::READ_ERROR);
 
   return buf;
