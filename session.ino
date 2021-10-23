@@ -41,12 +41,21 @@ static nfc::Status authenticate(uint8_t trailing_block_index, const uint8_t *key
   }
 }
 
+// Unauthenticate to the ACTIVE PICC
+static void unauthenticate() {
+  is_authenticated = false;
+  mfrc522.PCD_StopCrypto1();
+}
+
 // Initialize the remote MFRC522 chip
 void nfc::init_mfrc522() { mfrc522.PCD_Init(); }
 
 // Select a PICC and make it available to read / write operation
 Status nfc::select() {
   MFRC522::MIFARE_Key mf_key;
+
+  // Halting the ACTIVE PICC
+  ASSERT(mfrc522.PICC_HaltA() == MFRC522::STATUS_OK, Status::HALT_DENIED);
 
   // Inviting idling PICCs
   ASSERT(mfrc522.PICC_IsNewCardPresent(), Status::NO_CARD_DETECTED);
@@ -68,7 +77,10 @@ Optional<uint8_t[block_size]> nfc::read(uint8_t block_index, const uint8_t *key)
 
   if (!is_authenticated_to(trailing_block_index))
     PROPAGATE(authenticate(trailing_block_index, key));
-  ASSERT(mfrc522.MIFARE_Read(block_index, buf, &size) == MFRC522::STATUS_OK, Status::READ_ERROR);
+  if (mfrc522.MIFARE_Read(block_index, buf, &size) != MFRC522::STATUS_OK) {
+    unauthenticate();
+    return Status::READ_ERROR;
+  }
 
   return buf;
 }

@@ -49,7 +49,7 @@ void loop() {
   uint8_t buf[18] = {0};
   uint8_t buf_size = sizeof buf;
 
-  select();
+  error_handler(select());
   for (auto i = 4; i < 8; i++) {
     read(i, key).process(
         [](const auto &data) {

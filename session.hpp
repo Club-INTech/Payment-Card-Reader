@@ -16,7 +16,7 @@ constexpr size_t key_size = 6;
 constexpr size_t block_size = 18;
 constexpr size_t blocks_per_sector_nb = 4;
 
-enum class Status { OK, NO_CARD_DETECTED, NO_UID_RECEIVED, BAD_KEY, READ_ERROR, NO_ACTIVE_PICC };
+enum class Status { OK, NO_CARD_DETECTED, NO_UID_RECEIVED, BAD_KEY, READ_ERROR, NO_ACTIVE_PICC, HALT_DENIED };
 
 template<typename T>
 using Optional = detail::Optional_base<T, Status>;
