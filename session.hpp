@@ -25,8 +25,13 @@ enum class Status {
   READ_ERROR,
   WRITE_ERROR,
   NO_ACTIVE_PICC,
-  HALT_DENIED
+  HALT_DENIED,
+  TRANSFER_ERROR
 };
+
+enum class Access { FREE = 0b000, RAW_READ_WRITE = 0b100, RELOADABLE_VALUE_BLOCK = 0b110 };
+
+enum class KeyType { KEY_A, KEY_B };
 
 template<typename T>
 using Optional = detail::Optional_base<T, Status>;
@@ -34,7 +39,10 @@ using Optional = detail::Optional_base<T, Status>;
 void init_mfrc522();
 Status select();
 Optional<uint8_t[uid_size]> get_uid();
-Optional<uint8_t[block_size + crc_size]> read(uint8_t, const uint8_t *);
-Status write(uint8_t, const uint8_t *, const uint8_t *);
+Optional<uint8_t[block_size + crc_size]> read(uint8_t, const uint8_t *, KeyType);
+Status write(uint8_t, const uint8_t *, KeyType, const uint8_t *);
+Status write_value(uint8_t, const uint8_t *, KeyType, int32_t);
+Status decrement(uint8_t, const uint8_t *, KeyType, int32_t);
+Status set_access(uint8_t, const uint8_t *, KeyType, const Access *);
 
 } // namespace nfc
