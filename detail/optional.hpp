@@ -20,27 +20,30 @@ public:
 
   // If containing an object, call a functor on the content; call an handler on the status code instead
   template<typename F, typename Handler_F>
-  void process(F &&ftor, Handler_F &&handler_ftor) & {
+  Status_T process(F &&ftor, Handler_F &&handler_ftor) & {
     if (m_is_valid) {
       FWD(ftor)(m_content.object);
+      return Status_T::OK;
     } else {
-      FWD(handler_ftor)(m_content.status);
+      return FWD(handler_ftor)(m_content.status);
     }
   }
   template<typename F, typename Handler_F>
-  void process(F &&ftor, Handler_F &&handler_ftor) && {
+  Status_T process(F &&ftor, Handler_F &&handler_ftor) && {
     if (m_is_valid) {
       FWD(ftor)(move(m_content.object));
+      return Status_T::OK;
     } else {
-      FWD(handler_ftor)(m_content.status);
+      return FWD(handler_ftor)(m_content.status);
     }
   }
   template<typename F, typename Handler_F>
-  void process(F &&ftor, Handler_F &&handler_ftor) const & {
+  Status_T process(F &&ftor, Handler_F &&handler_ftor) const & {
     if (m_is_valid) {
       FWD(ftor)(m_content.object);
+      return Status_T::OK;
     } else {
-      FWD(handler_ftor)(m_content.status);
+      return FWD(handler_ftor)(m_content.status);
     }
   }
 
