@@ -19,6 +19,10 @@ public:
   Optional_base(Status_T status) : m_is_valid{false}, m_content{status} {}
 
   // If containing an object, call a functor on the content; call an handler on the status code instead
+  template<typename F>
+  Status_T process(F &&ftor) {
+    return process(FWD(ftor), [](Status_T status) { return status; });
+  }
   template<typename F, typename Handler_F>
   Status_T process(F &&ftor, Handler_F &&handler_ftor) & {
     if (m_is_valid) {
