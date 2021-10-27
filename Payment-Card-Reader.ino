@@ -1,8 +1,14 @@
 #include <MFRC522.h>
 #include <SPI.h>
 
+#include "Arduino-SHA-256/sha256.h"
+
 #include "detail/error.hpp"
 #include "session.hpp"
+
+#define QUOTE(TEXT) #TEXT
+#define TO_STRING(TEXT) QUOTE(TEXT)
+constexpr char salt[] = TO_STRING(SALT);
 
 static nfc::Status error_handler(nfc::Status status) {
   using namespace nfc;
@@ -126,13 +132,25 @@ void loop() {
   constexpr static uint8_t sector_index = 2;
   constexpr static uint8_t key[key_size] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
+  Sha256 sha256;
+
   delay(500);
   error_handler([&]() {
+    char uid[uid_size];
+
     PROPAGATE(configure_picc(sector_index, 16));
     PROPAGATE(update_quest_counter(sector_index, 16, key));
     PROPAGATE(update_quest_counter(sector_index, 15, key));
     PROPAGATE(update_quest_counter(sector_index, 14, key));
     PROPAGATE(update_quest_counter(sector_index, 13, key));
     PROPAGATE(update_quest_counter(sector_index, 10, key));
+    PROPAGATE(get_uid().process([&](const auto &data) { memcpy(uid, data, sizeof uid); }))
+
+    sha256.init();
+    sha256.print(salt);
+    sha256.print(uid);
+    print_byte_sequence(sha256.result(), 32);
+
+    return Status::OK;
   }());
 }
