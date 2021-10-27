@@ -4,8 +4,6 @@
 #include "detail/error.hpp"
 #include "session.hpp"
 
-constexpr uint8_t first_quest_index = 16;
-
 static nfc::Status error_handler(nfc::Status status) {
   using namespace nfc;
 
@@ -57,7 +55,7 @@ static void print_byte_sequence(const uint8_t (&array)[N]) {
   print_byte_sequence(array, N);
 }
 
-static nfc::Status configure_picc(uint8_t sector_index) {
+static nfc::Status configure_picc(uint8_t sector_index, uint16_t quest_nb) {
   using namespace nfc;
 
   constexpr static uint8_t key[key_size] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
@@ -77,7 +75,7 @@ static nfc::Status configure_picc(uint8_t sector_index) {
   }
   Serial.println("Formating the sector...");
   PROPAGATE(set_access(sector_index, key, KeyType::KEY_B, access_rights));
-  PROPAGATE(write_value(heading_block_index, key, KeyType::KEY_B, first_quest_index));
+  PROPAGATE(write_value(heading_block_index, key, KeyType::KEY_B, quest_nb));
   Serial.println("New content of the sector :");
   for (size_t i = heading_block_index; i < heading_block_index + blocks_per_sector_nb; i++) {
     PROPAGATE(read(i, key, KeyType::KEY_B).process(print));
@@ -130,7 +128,7 @@ void loop() {
 
   delay(500);
   error_handler([&]() {
-    PROPAGATE(configure_picc(sector_index));
+    PROPAGATE(configure_picc(sector_index, 16));
     PROPAGATE(update_quest_counter(sector_index, 16, key));
     PROPAGATE(update_quest_counter(sector_index, 15, key));
     PROPAGATE(update_quest_counter(sector_index, 14, key));
