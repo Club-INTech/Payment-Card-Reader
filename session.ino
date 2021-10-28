@@ -59,9 +59,6 @@ static nfc::Status authenticate(uint8_t trailing_block_index, const uint8_t *key
   }
 }
 
-// Unauthenticate to the ACTIVE PICC
-static void unauthenticate() { is_authenticated = false; }
-
 // Attempt to recover from an error
 // If it fails, the session is terminated
 static nfc::Status recover_session() {
@@ -85,9 +82,8 @@ Status nfc::select() {
 
   // Halting the ACTIVE PICC
   if (is_any_picc_active) {
-    ASSERT(mfrc522.PICC_HaltA() == MFRC522::STATUS_OK, Status::HALT_DENIED);
-    unauthenticate();
-    is_any_picc_active = false;
+    ASSERT(mfrc522.PICC_HaltA() != MFRC522::STATUS_ERROR, Status::HALT_DENIED);
+    terminate_session();
   }
 
   // Inviting idling PICCs
