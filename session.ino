@@ -50,7 +50,7 @@ static nfc::Status authenticate(uint8_t trailing_block_index, const uint8_t *key
     authenticated_to_trailing_block_index = trailing_block_index;
     authenticated_key_type = key_type;
     return Status::OK;
-  case MFRC522::STATUS_MIFARE_NACK:
+  case MFRC522::STATUS_TIMEOUT:
     is_authenticated = false;
     return Status::BAD_KEY;
   default:
@@ -274,7 +274,31 @@ Status nfc::set_access(uint8_t sector_index, const uint8_t *key, KeyType key_typ
                                static_cast<uint8_t>(access_bytes[0]),
                                static_cast<uint8_t>(access_bytes[1]),
                                static_cast<uint8_t>(access_bytes[2]),
-                               3);
+                               0b011);
+  if (mfrc522.MIFARE_Write(trailing_block_index, buf, block_size) != MFRC522::STATUS_OK) {
+    terminate_session();
+    return Status::FATAL;
+  }
+
+  return Status::OK;
+}
+
+Status nfc::seal_sector(
+    uint8_t sector_index, uint8_t *key, KeyType key_type, uint8_t *key_a, uint8_t *key_b, const Access *access_bytes) {
+  uint8_t buf[block_size + crc_size];
+  uint8_t size = sizeof buf;
+  uint8_t trailing_block_index = blocks_per_sector_nb * sector_index + 3;
+
+  ASSERT(is_any_picc_active, Status::NO_ACTIVE_PICC);
+
+  memcpy(buf, key_a, key_size);
+  memcpy(buf + key_size + 4, key_b, key_size);
+
+  mfrc522.MIFARE_SetAccessBits(buf + key_size,
+                               static_cast<uint8_t>(access_bytes[0]),
+                               static_cast<uint8_t>(access_bytes[1]),
+                               static_cast<uint8_t>(access_bytes[2]),
+                               0b111);
   if (mfrc522.MIFARE_Write(trailing_block_index, buf, block_size) != MFRC522::STATUS_OK) {
     terminate_session();
     return Status::FATAL;

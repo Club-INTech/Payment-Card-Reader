@@ -6,9 +6,41 @@
 #include "detail/error.hpp"
 #include "session.hpp"
 
+struct KeyPair {
+  uint8_t key_a[nfc::key_size];
+  uint8_t key_b[nfc::key_size];
+};
+
 #define QUOTE(TEXT) #TEXT
 #define TO_STRING(TEXT) QUOTE(TEXT)
+
+#if !(0 < QUEST && QUEST <= QUESTS_NB)
+#error "Quest index is invalid"
+#endif
+
 constexpr char salt[] = TO_STRING(SALT);
+constexpr uint8_t quest_index = QUEST;
+constexpr uint8_t quests_nb = QUESTS_NB;
+
+static nfc::Optional<KeyPair> generate_keys() {
+  using namespace nfc;
+
+  char uid[uid_size];
+  Sha256 sha256;
+  KeyPair key_pair;
+
+  PROPAGATE(get_uid().process([&](const auto &data) { memcpy(uid, data, sizeof uid); }));
+
+  sha256.init();
+  sha256.print(salt);
+  sha256.print(uid);
+  sha256.print(quests_nb);
+  sha256.print(quest_index);
+  memcpy(key_pair.key_a, sha256.result(), sizeof key_pair.key_a);
+  memcpy(key_pair.key_b, sha256.result() + sizeof key_pair.key_a, sizeof key_pair.key_b);
+
+  return key_pair;
+}
 
 static nfc::Status error_handler(nfc::Status status) {
   using namespace nfc;
@@ -64,28 +96,31 @@ static void print_byte_sequence(const uint8_t (&array)[N]) {
 static nfc::Status configure_picc(uint8_t sector_index, uint16_t quest_nb) {
   using namespace nfc;
 
-  constexpr static uint8_t key[key_size] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  constexpr static uint8_t default_key[key_size] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
   constexpr Access access_rights[] = {Access::RELOADABLE_VALUE_BLOCK, Access::READ_ONLY, Access::READ_ONLY};
 
   uint8_t heading_block_index = blocks_per_sector_nb * sector_index;
   auto print = [](const auto &value) { print_byte_sequence(value); };
 
-  PROPAGATE(select());
   PROPAGATE(get_uid().process([](const auto &uid) {
     Serial.print("I'm currently handling PICC ");
     print_byte_sequence(uid);
   }));
   Serial.println("Content of the sector :");
   for (size_t i = heading_block_index; i < heading_block_index + blocks_per_sector_nb; i++) {
-    read(i, key, KeyType::KEY_B).process(print);
+    error_handler(read(i, default_key, KeyType::KEY_B).process(print));
   }
   Serial.println("Formating the sector...");
-  PROPAGATE(set_access(sector_index, key, KeyType::KEY_B, access_rights));
-  PROPAGATE(write_value(heading_block_index, key, KeyType::KEY_B, quest_nb));
+  PROPAGATE(set_access(sector_index, default_key, KeyType::KEY_B, access_rights));
+  PROPAGATE(write_value(heading_block_index, default_key, KeyType::KEY_B, quest_nb));
   Serial.println("New content of the sector :");
   for (size_t i = heading_block_index; i < heading_block_index + blocks_per_sector_nb; i++) {
-    PROPAGATE(read(i, key, KeyType::KEY_B).process(print));
+    PROPAGATE(read(i, default_key, KeyType::KEY_B).process(print));
   }
+  Serial.println("Seal sector...");
+  PROPAGATE(generate_keys().process([&](const auto &key_pair) {
+    seal_sector(sector_index, default_key, KeyType::KEY_B, key_pair.key_a, key_pair.key_b, access_rights);
+  }));
 
   return Status::OK;
 }
@@ -130,26 +165,21 @@ void loop() {
   using namespace nfc;
 
   constexpr static uint8_t sector_index = 2;
-  constexpr static uint8_t key[key_size] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 
-  Sha256 sha256;
+  uint8_t key[key_size];
 
-  delay(500);
+  if (select() != Status::OK)
+    return;
   error_handler([&]() {
-    char uid[uid_size];
+    PROPAGATE(generate_keys().process([&](const auto &key_pair) { memcpy(key, key_pair.key_a, sizeof key); }));
+    ASSERT(error_handler(configure_picc(sector_index, 16)) != Status::OK, Status::OK);
 
-    PROPAGATE(configure_picc(sector_index, 16));
+    PROPAGATE(select());
     PROPAGATE(update_quest_counter(sector_index, 16, key));
     PROPAGATE(update_quest_counter(sector_index, 15, key));
     PROPAGATE(update_quest_counter(sector_index, 14, key));
     PROPAGATE(update_quest_counter(sector_index, 13, key));
     PROPAGATE(update_quest_counter(sector_index, 10, key));
-    PROPAGATE(get_uid().process([&](const auto &data) { memcpy(uid, data, sizeof uid); }))
-
-    sha256.init();
-    sha256.print(salt);
-    sha256.print(uid);
-    print_byte_sequence(sha256.result(), 32);
 
     return Status::OK;
   }());

@@ -42,5 +42,6 @@ Status write_value(uint8_t, const uint8_t *, KeyType, int32_t);
 Status increment(uint8_t, const uint8_t *, KeyType, int32_t = 1);
 Status decrement(uint8_t, const uint8_t *, KeyType, int32_t = 1);
 Status set_access(uint8_t, const uint8_t *, KeyType, const Access *);
+Status seal_sector(uint8_t, uint8_t *, KeyType, uint8_t *, uint8_t *, const Access *);
 
 } // namespace nfc
