@@ -4,26 +4,21 @@
 #include "Arduino-SHA-256/sha256.h"
 
 #include "detail/error.hpp"
+#include "display.hpp"
+#include "quest.hpp"
 #include "session.hpp"
+
+constexpr static int debug_pin = 2;
 
 struct KeyPair {
   uint8_t key_a[nfc::key_size];
   uint8_t key_b[nfc::key_size];
 };
 
-#define QUOTE(TEXT) #TEXT
-#define TO_STRING(TEXT) QUOTE(TEXT)
-
-#if !(0 < QUEST && QUEST <= QUESTS_NB)
-#error "Quest index is invalid"
-#endif
-
-constexpr char salt[] = TO_STRING(SALT);
-constexpr uint8_t quest_index = QUEST;
-constexpr uint8_t quests_nb = QUESTS_NB;
-
 static nfc::Optional<KeyPair> generate_keys() {
   using namespace nfc;
+
+  constexpr static char salt[] = TO_STRING(SALT);
 
   char uid[uid_size];
   Sha256 sha256;
@@ -42,111 +37,73 @@ static nfc::Optional<KeyPair> generate_keys() {
   return key_pair;
 }
 
-static nfc::Status error_handler(nfc::Status status) {
-  using namespace nfc;
-
-  switch (status) {
-  case Status::OK:
-    break;
-  case Status::NO_CARD_DETECTED:
-    Serial.println("No card detected");
-    break;
-  case Status::NO_UID_RECEIVED:
-    Serial.println("No uid received");
-    break;
-  case Status::BAD_KEY:
-    Serial.println("Bad key");
-    break;
-  case Status::NO_ACTIVE_PICC:
-    Serial.println("No PICC selected");
-    break;
-  case Status::HALT_DENIED:
-    Serial.println("PICC denied the halt request");
-    break;
-  case Status::ACCESS_DENIED:
-    Serial.println("PICC didn't grant access to this block");
-    break;
-  case Status::FATAL:
-    Serial.println("An unrecoverable error has occured and connection has been terminated");
-    break;
-  default:
-    Serial.print("Unknown error : ");
-    Serial.println(static_cast<int>(status));
-    break;
-  }
-
-  return status;
-}
-
-static void print_byte_sequence(const uint8_t *sequence, size_t size) {
-  for (size_t i = 0; i < size; i++) {
-    if (sequence[i] <= 0xf)
-      Serial.print('0');
-    Serial.print(sequence[i], HEX);
-    Serial.print(' ');
-  }
-  Serial.println();
-}
-
-template<size_t N>
-static void print_byte_sequence(const uint8_t (&array)[N]) {
-  print_byte_sequence(array, N);
-}
-
-static nfc::Status configure_picc(uint8_t sector_index, uint16_t quest_nb) {
+static nfc::Status configure_picc(uint8_t sector_index, int16_t quests_nb, const uint8_t *key_a, const uint8_t *key_b) {
   using namespace nfc;
 
   constexpr static uint8_t default_key[key_size] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-  constexpr Access access_rights[] = {Access::RELOADABLE_VALUE_BLOCK, Access::READ_ONLY, Access::READ_ONLY};
+  constexpr static Access access_rights[] = {Access::RELOADABLE_VALUE_BLOCK, Access::READ_ONLY, Access::READ_ONLY};
 
   uint8_t heading_block_index = blocks_per_sector_nb * sector_index;
-  auto print = [](const auto &value) { print_byte_sequence(value); };
+  auto dump_data = [](const auto &value) { print_byte_sequence(value); };
 
   PROPAGATE(get_uid().process([](const auto &uid) {
-    Serial.print("I'm currently handling PICC ");
+    print("I'm currently handling PICC ");
     print_byte_sequence(uid);
   }));
-  Serial.println("Content of the sector :");
+  println("Content of the sector :");
   for (size_t i = heading_block_index; i < heading_block_index + blocks_per_sector_nb; i++) {
-    error_handler(read(i, default_key, KeyType::KEY_B).process(print));
+    error_handler(read(i, default_key, KeyType::KEY_B).process(dump_data));
   }
-  Serial.println("Formating the sector...");
+  println("Formating the sector...");
   PROPAGATE(set_access(sector_index, default_key, KeyType::KEY_B, access_rights));
-  PROPAGATE(write_value(heading_block_index, default_key, KeyType::KEY_B, quest_nb));
-  Serial.println("New content of the sector :");
+  PROPAGATE(write_value(heading_block_index, default_key, KeyType::KEY_B, quests_nb));
+  println("New content of the sector :");
   for (size_t i = heading_block_index; i < heading_block_index + blocks_per_sector_nb; i++) {
-    PROPAGATE(read(i, default_key, KeyType::KEY_B).process(print));
+    PROPAGATE(read(i, default_key, KeyType::KEY_B).process(dump_data));
   }
-  Serial.println("Seal sector...");
+  println("Seal sector...");
   PROPAGATE(generate_keys().process([&](const auto &key_pair) {
-    seal_sector(sector_index, default_key, KeyType::KEY_B, key_pair.key_a, key_pair.key_b, access_rights);
+    seal_sector(sector_index, default_key, KeyType::KEY_B, key_a, key_b, access_rights);
   }));
 
   return Status::OK;
 }
 
-static nfc::Status update_quest_counter(uint8_t sector_index, int32_t quest_index, const uint8_t *key) {
+static nfc::Status update_quest_counter(uint8_t sector_index, int32_t step, const uint8_t *key) {
   using namespace nfc;
 
   uint8_t heading_block_index = blocks_per_sector_nb * sector_index;
-  int32_t quest_advancement;
-  auto store_quest_advancement = [&](const auto &value) { quest_advancement = value; };
+  int32_t picc_advancement;
+  auto store_picc_advancement = [&](const auto &value) { picc_advancement = value; };
 
-  PROPAGATE(read_value(heading_block_index, key, KeyType::KEY_A).process(store_quest_advancement));
-  if (quest_advancement == quest_index) {
+  PROPAGATE(read_value(heading_block_index, key, KeyType::KEY_A).process(store_picc_advancement));
+  if (picc_advancement == step) {
     PROPAGATE(decrement(heading_block_index, key, KeyType::KEY_A));
-    Serial.println("Updated quest advancement !");
-  } else if (quest_advancement < quest_index) {
-    Serial.print("Already reached step ");
-    Serial.println(quest_index);
+    println("Updated quest advancement !");
+  } else if (picc_advancement < step) {
+    print("Already reached step ");
+    println(step);
   } else {
-    Serial.print("Haven't fullfilled the prerequisite steps before ");
-    Serial.println(quest_index);
+    print("Haven't fullfilled the prerequisite steps before ");
+    println(step);
   }
 
-  PROPAGATE(read_value(heading_block_index, key, KeyType::KEY_A).process(store_quest_advancement));
-  Serial.print("Quest is at stage : ");
-  Serial.println(quest_advancement);
+  PROPAGATE(read_value(heading_block_index, key, KeyType::KEY_A).process(store_picc_advancement));
+  print("Quest is at stage : ");
+  println(picc_advancement);
+
+  return Status::OK;
+}
+
+static nfc::Status reset_quest_counter(uint8_t sector_index, int32_t value, const uint8_t *key) {
+  using namespace nfc;
+
+  uint8_t heading_block_index = blocks_per_sector_nb * sector_index;
+
+  PROPAGATE(write_value(heading_block_index, key, KeyType::KEY_B, value));
+
+  println("Value written : ");
+  PROPAGATE(read_value(heading_block_index, key, KeyType::KEY_B).process([](auto x) { println(x); }));
 
   return Status::OK;
 }
@@ -154,11 +111,25 @@ static nfc::Status update_quest_counter(uint8_t sector_index, int32_t quest_inde
 void setup() {
   using namespace nfc;
 
+  pinMode(debug_pin, INPUT_PULLUP);
+
   Serial.begin(9600);
+  enable_display(digitalRead(debug_pin) == LOW);
   SPI.begin();
   init_mfrc522();
 
-  Serial.println("BEGIN");
+  attachInterrupt(
+      digitalPinToInterrupt(debug_pin),
+      []() {
+        if (digitalRead(debug_pin) == LOW) {
+          Serial.println("DEBUG MODE ENABLED");
+          enable_display(true);
+        } else {
+          Serial.println("DEBUG MODE DISABLED");
+          enable_display(false);
+        }
+      },
+      CHANGE);
 }
 
 void loop() {
@@ -166,21 +137,38 @@ void loop() {
 
   constexpr static uint8_t sector_index = 2;
 
-  uint8_t key[key_size];
+  uint8_t key_a[key_size];
+  uint8_t key_b[key_size];
 
   if (select() != Status::OK)
     return;
-  error_handler([&]() {
-    PROPAGATE(generate_keys().process([&](const auto &key_pair) { memcpy(key, key_pair.key_a, sizeof key); }));
-    ASSERT(error_handler(configure_picc(sector_index, 16)) != Status::OK, Status::OK);
 
-    PROPAGATE(select());
-    PROPAGATE(update_quest_counter(sector_index, 16, key));
-    PROPAGATE(update_quest_counter(sector_index, 15, key));
-    PROPAGATE(update_quest_counter(sector_index, 14, key));
-    PROPAGATE(update_quest_counter(sector_index, 13, key));
-    PROPAGATE(update_quest_counter(sector_index, 10, key));
+  if (digitalRead(debug_pin) == LOW) {
+    error_handler([&]() {
+      PROPAGATE(generate_keys().process([&](const auto &key_pair) {
+        memcpy(key_a, key_pair.key_a, sizeof key_a);
+        memcpy(key_b, key_pair.key_b, sizeof key_b);
+      }));
 
-    return Status::OK;
-  }());
+      println("ATTEMPT TO CONFIGURE PICC IF NEEDED");
+      ASSERT(error_handler(configure_picc(sector_index, quests_nb, key_a, key_b)) != Status::OK, Status::OK);
+
+      println("TEST THE QUEST ADVANCEMENT");
+      PROPAGATE(select());
+      for (size_t i = quests_nb; i > 0; i--)
+        PROPAGATE(update_quest_counter(sector_index, i, key_a));
+
+      println("RESET THE QUEST ADVANCEMENT");
+      PROPAGATE(reset_quest_counter(sector_index, quests_nb, key_b));
+
+      return Status::OK;
+    }());
+
+    delay(500);
+  } else {
+    [&]() {
+      PROPAGATE(generate_keys().process([&](const auto &key_pair) { memcpy(key_a, key_pair.key_a, sizeof key_a); }));
+      PROPAGATE(update_quest_counter(sector_index, quest_index, key_a));
+    }();
+  }
 }

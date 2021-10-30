@@ -283,6 +283,7 @@ Status nfc::set_access(uint8_t sector_index, const uint8_t *key, KeyType key_typ
   return Status::OK;
 }
 
+// Seal the sector current configuration and set up keys
 Status nfc::seal_sector(
     uint8_t sector_index, uint8_t *key, KeyType key_type, uint8_t *key_a, uint8_t *key_b, const Access *access_bytes) {
   uint8_t buf[block_size + crc_size];
