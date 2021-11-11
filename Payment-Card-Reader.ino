@@ -29,8 +29,6 @@ static nfc::Optional<KeyPair> generate_keys() {
   sha256.init();
   sha256.print(salt);
   sha256.print(uid);
-  sha256.print(quests_nb);
-  sha256.print(quest_index);
   memcpy(key_pair.key_a, sha256.result(), sizeof key_pair.key_a);
   memcpy(key_pair.key_b, sha256.result() + sizeof key_pair.key_a, sizeof key_pair.key_b);
 
