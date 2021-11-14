@@ -61,7 +61,7 @@ static nfc::Status configure_picc(uint8_t sector_index, uint8_t quests_nb, const
   for (size_t i = heading_block_index; i < heading_block_index + blocks_per_sector_nb; i++) {
     PROPAGATE(read(i, default_key, KeyType::KEY_B).process(dump_data));
   }
-#ifdef NDEBUG
+#ifndef DEBUG
   println("Seal sector...");
   seal_sector(sector_index, default_key, KeyType::KEY_B, key_a, key_b, access_rights);
 #endif
@@ -155,7 +155,7 @@ void loop() {
 
       println("ATTEMPT TO CONFIGURE PICC IF NEEDED");
       auto configure_code = error_handler(configure_picc(sector_index, quests_nb, default_key, key_b));
-#ifdef NDEBUG
+#ifndef DEBUG
       ASSERT(configure_code != Status::OK, Status::OK);
 #endif
 
