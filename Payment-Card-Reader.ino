@@ -173,8 +173,8 @@ void loop() {
     delay(500);
   } else {
     [&]() {
-      PROPAGATE(generate_keys().process([&](const auto &key_pair) { memcpy(key_a, key_pair.key_a, sizeof key_a); }));
-      PROPAGATE(update_quest_counter(sector_index, quest_index, key_a));
+      PROPAGATE(generate_keys().process([&](const auto &key_pair) { memcpy(key_b, key_pair.key_b, sizeof key_b); }));
+      PROPAGATE(update_quest_counter(sector_index, quest_index, key_b));
     }();
   }
 }
