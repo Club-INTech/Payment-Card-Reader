@@ -1,4 +1,6 @@
-# Payment Card Read
+> :warning: Le code suivant n'a été testé qu'avec la technique du doigt mouillé, et a été fait à l'arrache. Je garantis pas grand chose s'il est décidé de faire un fork de ce dépot. Le fichier "session.ino" et ses dependances devraient être bons.
+
+# RFID-Scavenger-Hunt
 
 Hold a scavenger hunt with RFID tag !
 The players must find every tag reader in the right order to win the game. Each player is given an RFID tag, whose information is checked then updated by the tag readers.
